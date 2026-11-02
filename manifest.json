@@ -1,0 +1,17 @@
+{
+  "name": "All in One",
+  "short_name": "All in One",
+  "description": "Medical records and document storage in one place",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
