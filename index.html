@@ -3626,6 +3626,7 @@ const DB_NAME = 'MediVault_Docs_DB';
        RENDER DOCTORS & CARE TEAM (WITH REAL DOCTOR MANAGEMENT)
        ===================================================================== */
     function renderDoctors() {
+      if (typeof loadPdfMaker === 'function') loadPdfMaker().catch(() => {});
       const container = document.getElementById('doctorsViewList');
       if (!container) return;
 
@@ -3737,6 +3738,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <button onclick="openEditModal('careteam', ${jsAttr(c.id)})" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center space-x-1">
                   <span><svg class="ico ico-t" aria-hidden="true"><use href="#i-pencil"/></svg>Edit</span>
                 </button>
+                <button onclick="shareRecordPdf('doctor', ${jsAttr(c.id)})" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs"><svg class="ico ico-t" aria-hidden="true"><use href="#i-upload"/></svg>Share PDF</button>
               </div>
               <button onclick="deleteDoctorPrompt(${jsAttr(c.id)}, ${jsAttr(c.name)})" class="text-xs text-slate-400 hover:text-rose-600 p-1">Delete</button>
             </div>
@@ -4078,6 +4080,7 @@ const DB_NAME = 'MediVault_Docs_DB';
        RENDER CATEGORIZED MEDICATIONS IN SPECIFIC HEALTH TABS
        ===================================================================== */
     function renderCategoryMedications(category, containerId) {
+      loadPdfMaker().catch(() => {});
       const container = document.getElementById(containerId);
       if (!container) return;
 
@@ -4135,7 +4138,10 @@ const DB_NAME = 'MediVault_Docs_DB';
 
             <div class="mt-3 pt-2 border-t border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs">
               <span class="text-[10px] text-slate-400">Also in All Medications</span>
-              <button onclick="openEditModal('medications', ${jsAttr(m.id)})" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Edit</button>
+              <span class="flex items-center gap-3">
+                <button onclick="shareRecordPdf('medication', ${jsAttr(m.id)})" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline"><svg class="ico ico-t" aria-hidden="true"><use href="#i-upload"/></svg>Share PDF</button>
+                <button onclick="openEditModal('medications', ${jsAttr(m.id)})" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Edit</button>
+              </span>
             </div>
           </div>
         `;
@@ -6298,6 +6304,84 @@ const DB_NAME = 'MediVault_Docs_DB';
       }
     }
 
+    /* ---------- One doctor or one medication as a PDF to share ---------- */
+    function recordPdfDoc(title, subtitle, rows, sections) {
+      const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+      const margin = 48;
+      const pageW = doc.internal.pageSize.getWidth();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20);
+      doc.text(pdfText(title), margin, margin + 10, { maxWidth: pageW - margin * 2 });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+      doc.text(pdfText(subtitle), margin, margin + 28);
+      let y = margin + 44;
+      const filled = rows.filter(r => r[1] !== undefined && r[1] !== null && String(r[1]).trim() !== '');
+      window.autoTable(doc, {
+        startY: y, body: filled.map(r => [pdfText(r[0]), pdfText(r[1])]),
+        margin: { left: margin, right: margin }, theme: 'plain',
+        styles: { fontSize: 11, cellPadding: 6, textColor: 20, overflow: 'linebreak' },
+        columnStyles: { 0: { fontStyle: 'bold', textColor: 100, cellWidth: 130 } },
+        didDrawCell: data => { if (data.column.index === 0 && data.row.index > 0) { doc.setDrawColor(230); doc.line(margin, data.cell.y, pageW - margin, data.cell.y); } }
+      });
+      y = doc.lastAutoTable.finalY + 22;
+      (sections || []).forEach(sec => {
+        if (!sec.rows.length) return;
+        if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = margin; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(67, 56, 202);
+        doc.text(sec.title.toUpperCase(), margin, y);
+        doc.setDrawColor(210); doc.line(margin, y + 5, pageW - margin, y + 5);
+        window.autoTable(doc, {
+          startY: y + 10, head: [sec.head], body: sec.rows.map(r => r.map(c => pdfText(c) || '-')),
+          margin: { left: margin, right: margin }, theme: 'plain',
+          styles: { fontSize: 10, cellPadding: 4, textColor: 20, overflow: 'linebreak' },
+          headStyles: { fontStyle: 'bold', textColor: 100 }, columnStyles: { 0: { fontStyle: 'bold' } }
+        });
+        y = doc.lastAutoTable.finalY + 22;
+      });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
+      doc.text(pdfText('Made with All in One on ' + formatDate(localISODate())), margin, doc.internal.pageSize.getHeight() - 24);
+      return doc.output('blob');
+    }
+
+    function doctorPdf(c) {
+      const sameDoctor = name => { const d = name ? findDoctorByName(name) : null; return d && d.id === c.id; };
+      const meds = (state.medications || []).filter(m => m.status === 'active' && sameDoctor(m.doctor)).sort(medListOrder);
+      const apts = sortAppointmentsByDate((state.appointments || []).filter(a => a.status === 'upcoming' && a.date && calculateDaysRemaining(a.date) >= 0 && sameDoctor(a.doctor)));
+      return recordPdfDoc(drName(c.name), [c.specialty, c.clinic].filter(Boolean).join(' - ') || 'Doctor', [
+        ['Specialty', c.specialty], ['Clinic', c.clinic], ['Phone', c.phone], ['Email', c.email], ['Address', c.address], ['Notes', c.notes]
+      ], [
+        { title: 'Current medications from this doctor', head: ['Medication', 'Dose', 'How often'], rows: meds.map(m => [m.name, m.dosage, m.frequency]) },
+        { title: 'Upcoming appointments', head: ['Date', 'Visit'], rows: apts.map(a => [formatDate(a.date) + (a.time ? ' ' + a.time : ''), a.title]) }
+      ]);
+    }
+
+    function medicationPdf(m) {
+      const isOTC = (m.medType || m.type) === 'OTC';
+      const supply = m.status === 'active' ? medSupplyInfo(m) : null;
+      const doc = m.doctor ? findDoctorByName(m.doctor) : null;
+      return recordPdfDoc(m.name + (m.dosage ? ' ' + m.dosage : ''), (m.status === 'past' ? 'Past medication' : 'Current medication') + (isOTC ? ' - over the counter' : ' - prescription'), [
+        ['Dose', m.dosage], ['How often', m.frequency], ['Reason', m.purpose],
+        ['Type', isOTC ? 'Over the counter (OTC)' : 'Prescription (Rx)'], ['Status', m.status === 'past' ? 'Past / stopped' : 'Current'],
+        [isOTC ? 'Recommended by' : 'Prescriber', m.doctor ? m.doctor + (doc && doc.phone ? ' (' + doc.phone + ')' : '') : ''],
+        ['Health area', m.category], ['Started', m.startDate ? formatDate(m.startDate) : ''], ['Stopped', m.endDate ? formatDate(m.endDate) : ''],
+        ['Runs out', supply ? describeSupply(supply) : ''], ['Side effects', m.sideEffects], ['Notes', m.notes]
+      ]);
+    }
+
+    async function shareRecordPdf(kind, id) {
+      try {
+        await loadPdfMaker();
+        const list = kind === 'doctor' ? state.careteam : state.medications;
+        const rec = (list || []).find(x => x.id === id);
+        if (!rec) return;
+        const blob = kind === 'doctor' ? doctorPdf(rec) : medicationPdf(rec);
+        const base = (kind === 'doctor' ? drName(rec.name) : rec.name).replace(/[^A-Za-z0-9 ._()-]+/g, '').trim() || (kind === 'doctor' ? 'Doctor' : 'Medication');
+        await promptSaveFile(blob, `${base}.pdf`, 'application/pdf');
+      } catch (err) {
+        console.warn('Share PDF failed', err);
+        showToast('Could not make the PDF. Please try again.');
+      }
+    }
+
     function printMedicalSummary() {
       document.body.classList.add('printing-summary');
       const done = () => { document.body.classList.remove('printing-summary'); window.removeEventListener('afterprint', done); };
@@ -6560,6 +6644,7 @@ const DB_NAME = 'MediVault_Docs_DB';
     }
 
     function renderMedications() {
+      loadPdfMaker().catch(() => {});
       const allMeds = state.medications || [];
       document.getElementById('count-all-meds').innerText = allMeds.length;
       document.getElementById('count-active-meds').innerText = allMeds.filter(m => m.status === 'active').length;
@@ -6639,7 +6724,10 @@ const DB_NAME = 'MediVault_Docs_DB';
                   ${isActive ? 'Mark as Past' : 'Mark as Current'}
                 </button>
               </div>
-              <button onclick="openDocumentUploadModal('Medications')" class="text-[11px] text-blue-600 dark:text-blue-400 font-semibold">${isOTC ? '+ Attach Info/Doc' : '+ Attach Rx'}</button>
+              <span class="flex items-center gap-3">
+                <button onclick="shareRecordPdf('medication', ${jsAttr(m.id)})" class="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold"><svg class="ico ico-t" aria-hidden="true"><use href="#i-upload"/></svg>Share PDF</button>
+                <button onclick="openDocumentUploadModal('Medications')" class="text-[11px] text-blue-600 dark:text-blue-400 font-semibold">${isOTC ? '+ Attach Info/Doc' : '+ Attach Rx'}</button>
+              </span>
             </div>
           </div>
         `;
