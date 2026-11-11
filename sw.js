@@ -1,7 +1,7 @@
 // Offline support for the hosted (https) copy of All in One.
 // Network first so updates show up right away; the cached copy is used when there is no connection.
 // Only the app's own files are cached — records and documents stay in the browser's own storage.
-const CACHE = 'all-in-one-20261111065219';
+const CACHE = 'all-in-one-20261111070553';
 const NETWORK_TIMEOUT_MS = 5000;
 const CALENDAR_CACHE = 'all-in-one-calendar';
 // The text reader for the medication screenshot scan (about 11 MB). It is kept in its own cache,
@@ -24,7 +24,9 @@ const APP_FILES = [
   './icon-header.png',
   './vendor/tailwindcss.js',
   './vendor/pdfjs/pdf.min.js',
-  './vendor/pdfjs/pdf.worker.min.js'
+  './vendor/pdfjs/pdf.worker.min.js',
+  './vendor/jspdf/jspdf.umd.min.js',
+  './vendor/jspdf/jspdf.plugin.autotable.min.js'
 ];
 
 self.addEventListener('install', (event) => {
