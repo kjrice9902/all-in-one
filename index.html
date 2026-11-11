@@ -4008,7 +4008,8 @@ const DB_NAME = 'MediVault_Docs_DB';
       const container = document.getElementById(containerId);
       if (!container) return;
 
-      const meds = getCategoryMedications(category);
+      // Keep current medications on top and move past ones to the bottom
+      const meds = [...getCategoryMedications(category)].sort((x, y) => (x.status === 'past') - (y.status === 'past'));
 
       if (meds.length === 0) {
         container.innerHTML = `
@@ -4032,7 +4033,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <div>
                   <div class="flex items-center space-x-1.5 mb-1">
                     <span class="tag-badge ${isActive ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'} text-[10px]">
-                      ${isActive ? '● ACTIVE' : '○ PAST'}
+                      ${isActive ? '● ACTIVE' : '<span style="color: var(--danger); position: relative; left: -2px">●</span> PAST'}
                     </span>
                     <span class="tag-badge ${isOTC ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800' : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'} text-[10px] font-bold">
                       ${isOTC ? 'OTC' : 'Rx'}
@@ -4134,6 +4135,217 @@ const DB_NAME = 'MediVault_Docs_DB';
         if (detectedType === 'OTC') typeSelect.value = 'OTC';
         else if (!currentEditingId) typeSelect.value = 'Prescribed';
       }
+    }
+
+    /* =====================================================================
+       MEDICATION SCREENSHOT SCAN
+       Reads the text in a photo or screenshot of a medication label or
+       pharmacy app on this device (the picture is not sent anywhere) and
+       fills in the empty form fields it can find. The text reader
+       (Tesseract.js) downloads the first time it is used.
+       ===================================================================== */
+    const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    // Fingerprint of that exact file: the browser refuses to run it if even one byte was changed
+    const TESSERACT_SRI = 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F';
+    let tesseractLoading = null;
+
+    function loadTesseract() {
+      if (window.Tesseract) return Promise.resolve(window.Tesseract);
+      if (!tesseractLoading) {
+        tesseractLoading = new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = TESSERACT_URL;
+          s.integrity = TESSERACT_SRI;
+          s.crossOrigin = 'anonymous';
+          s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('Text reader did not load'));
+          s.onerror = () => { tesseractLoading = null; s.remove(); reject(new Error('Text reader did not load')); };
+          document.head.appendChild(s);
+        });
+      }
+      return tesseractLoading;
+    }
+
+    const MED_WORD_NUMBERS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, half: 0.5, '½': 0.5 };
+
+    // How many doses a day a direction such as "Take 2 tablets by mouth twice daily" means
+    function medDosesPerDay(sig) {
+      const s = ' ' + sig.toLowerCase() + ' ';
+      let times = null;
+      const everyHours = s.match(/every\s+(\d{1,2})(?:\s*(?:-|to)\s*\d{1,2})?\s*(?:hours|hrs?|h)\b/);
+      if (/\b(once|one time|1 time|1x)\s*(a\s+)?(daily|day|a day|per day|every day|each day)\b|\bevery (day|morning|evening|night)\b|\b(daily|qd|at bedtime|nightly|every night|in the morning|qhs)\b/.test(s)) times = 1;
+      if (/\b(twice|two times|2 times|2x)\b|\bbid\b|\bevery 12\s*(hours|hrs?|h)\b/.test(s)) times = 2;
+      if (/\b(three times|3 times|3x)\b|\btid\b/.test(s)) times = 3;
+      if (/\b(four times|4 times|4x)\b|\bqid\b/.test(s)) times = 4;
+      if (times === null && everyHours) {
+        const h = parseInt(everyHours[1], 10);
+        if (h > 0 && h <= 24) times = Math.floor(24 / h);
+      }
+      if (/\b(as needed|prn|weekly|every week|once a week|every other day|monthly)\b/.test(s)) return null;
+      if (times === null) return null;
+      let amount = 1;
+      const amt = s.match(/\b(?:take|use|inhale|apply|give|chew|dissolve|instill|inject)\s+(\d+(?:\.\d+)?|one|two|three|four|five|six|half|½)\s*(?:\(\w+\)\s*)?(?:tablets?|tabs?|capsules?|caps?|pills?|puffs?|sprays?|drops?|softgels?|units?|patch(?:es)?|ml|teaspoons?|tsp)?/);
+      if (amt) {
+        const v = MED_WORD_NUMBERS[amt[1]] ?? parseFloat(amt[1]);
+        if (v > 0 && v < 20) amount = v;
+      }
+      return Math.round(times * amount * 100) / 100;
+    }
+
+    function parseMedLabelText(raw) {
+      const out = {};
+      const lines = String(raw || '').split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const text = lines.join('\n');
+      const flat = lines.join(' ');
+
+      // Name and strength: the words just before a strength such as "50 mg"
+      const doseRe = /(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)?\s*(?:mg|mcg|µg|ug|g|ml|mL|units?|iu|IU|%|meq|mEq)(?:\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:ml|mL|hr|h|actuation|spray|dose))?)\b/i;
+      const skipLine = /\b(qty|quantity|refill|rx\s*#|rx\s*no|date|filled|prescriber|dr\.|pharmacy|phone|take|use|apply|inhale|expires?|discard|ndc|warning|caution)\b/i;
+      for (const line of lines) {
+        const m = line.match(doseRe);
+        if (!m || skipLine.test(line.slice(0, m.index))) continue;
+        let name = line.slice(0, m.index)
+          .replace(/^[^A-Za-z]+/, '')
+          .replace(/\b(generic for|brand|medication|drug|name)\s*:?\s*/ig, '')
+          .replace(/[^A-Za-z0-9 \-\/()]+$/, '')
+          .trim();
+        if (name.length < 3 || !/[A-Za-z]{3}/.test(name)) continue;
+        name = name.split(' ').slice(-5).join(' ');
+        // Labels are often all capitals: "SERTRALINE HCL" -> "Sertraline HCl"
+        if (name === name.toUpperCase()) {
+          name = name.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\bHcl\b/g, 'HCl').replace(/\b(Er|Xr|Sr|Cr|Dr|Xl|La|Odt)\b/g, w => w.toUpperCase());
+        }
+        out.name = name;
+        out.dosage = m[1].replace(/\s+/g, ' ').replace(/[a-zµ%]+/gi, u => /^(iu|meq)$/i.test(u) ? u.toUpperCase() : u.toLowerCase()).replace(/(\d)\s*(mg|mcg|g|ml|iu|meq|units?)\b/i, '$1 $2').replace(/\bml\b/i, 'mL');
+        break;
+      }
+
+      // Directions: the "Take ..." sentence
+      const sig = flat.match(/\b(take|use|inhale|apply|give|chew|dissolve|instill|inject|place|insert|spray)\b[^.]{3,160}?(?=\.|\b(?:qty|quantity|refills?|rx|dr\.|prescriber|disp|date|filled|ndc|mfg|discard)\b|$)/i);
+      if (sig) {
+        let f = sig[0].trim().replace(/[\s,;:-]+$/, '');
+        // "for anxiety" at the end of the directions is the reason
+        const why = f.match(/\s+for\s+([a-z][a-z \-\/]{2,40})$/i);
+        if (why && !/\b(days?|weeks?|months?|hours?)\b/i.test(why[1])) {
+          out.purpose = why[1].trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
+          f = f.slice(0, why.index).trim();
+        }
+        out.frequency = f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
+        const perDay = medDosesPerDay(sig[0]);
+        if (perDay) out.supplyPerDay = perDay;
+      }
+
+      // Quantity and fill date: used to work out how many are left today
+      const qty = flat.match(/\b(?:qty|quantity|disp(?:ensed)?)\s*[:.]?\s*(\d{1,4})(?:\.0+)?\b/i);
+      const qtyNum = qty ? parseInt(qty[1], 10) : null;
+      const dateM = text.match(/\b(?:filled|fill date|date filled|dispensed|date)\s*(?:on|:)?\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/i);
+      let filled = null;
+      if (dateM) {
+        let y = parseInt(dateM[3], 10);
+        if (y < 100) y += 2000;
+        const d = new Date(y, parseInt(dateM[1], 10) - 1, parseInt(dateM[2], 10));
+        if (!isNaN(d) && d <= new Date()) filled = d;
+      }
+      if (qtyNum && qtyNum > 0 && qtyNum < 2000) {
+        let left = qtyNum;
+        if (filled && out.supplyPerDay) {
+          const days = Math.floor((Date.now() - filled.getTime()) / 86400000);
+          left = Math.max(0, Math.round((qtyNum - out.supplyPerDay * days) * 100) / 100);
+        }
+        out.supplyLeft = left;
+      }
+
+      // Prescriber
+      const doc = text.match(/\b(?:prescriber|prescribed by|doctor|physician|provider|dr\.)[ \t]*:?[ \t]*((?:dr\.?[ \t]+)?[A-Z][A-Za-z'\-]+(?:,?[ \t]+[A-Z]\.?(?=[ \t]))?(?:,?[ \t]+[A-Z][A-Za-z'\-]+){0,2})/i)
+        || text.match(/\b([A-Z][A-Za-z'\-]+(?:[ \t]+[A-Z]\.?)?[ \t]+[A-Z][A-Za-z'\-]+),?[ \t]+(?:MD|DO|NP|PA-C|PA|DDS|DMD|APRN|FNP)\b/);
+      if (doc) {
+        let d = doc[1].replace(/^dr\.?\s+/i, '').replace(/,?\s+(MD|DO|NP|PA-C|PA|DDS|DMD|APRN|FNP)$/i, '').trim();
+        if (d === d.toUpperCase()) d = d.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+        // "SMITH, JOHN" -> "John Smith"
+        const comma = d.match(/^([A-Za-z'\-]+),\s*([A-Za-z'\-]+(?:\s+[A-Z]\.?)?)$/);
+        if (comma) d = `${comma[2]} ${comma[1]}`;
+        if (d.length > 2) out.doctor = `Dr. ${d}`;
+      }
+
+      // Extra details for the notes
+      const extras = [];
+      const rx = flat.match(/\bRx\s*(?:#|no\.?|number)\s*:?\s*([A-Z0-9\-]{4,})/i);
+      if (rx) extras.push(`Rx #${rx[1]}`);
+      const refills = flat.match(/\b(\d{1,2}|no)\s+refills?\b|\brefills?\s*(?:left|remaining)?\s*:?\s*(\d{1,2}|none|no)\b/i);
+      if (refills) extras.push(`Refills: ${(refills[1] || refills[2]).replace(/^no(ne)?$/i, '0')}`);
+      if (dateM) extras.push(`Filled: ${dateM[1]}/${dateM[2]}/${dateM[3]}`);
+      if (qtyNum) extras.push(`Qty: ${qtyNum}`);
+      const pharm = lines.find(l => /\b(cvs|walgreens|rite aid|walmart|kroger|costco|publix|target|safeway|heb|meijer|optum|express scripts|caremark|amazon pharmacy|pharmacy)\b/i.test(l) && l.length < 60);
+      if (pharm) extras.push(`Pharmacy: ${pharm}`);
+      if (extras.length) out.notes = `From scan — ${extras.join(' · ')}`;
+      if (rx || refills || out.doctor) out.medType = 'Prescribed';
+      return out;
+    }
+
+    async function scanMedicationImage(input) {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      const status = document.getElementById('medScanStatus');
+      const setStatus = (msg, tone) => {
+        if (!status) return;
+        status.className = `text-[11px] mt-1.5 ${tone === 'bad' ? 'text-rose-600 dark:text-rose-400' : tone === 'good' ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-slate-500 dark:text-slate-400'}`;
+        status.textContent = msg;
+      };
+      if (!/^image\//.test(file.type)) { setStatus('Please choose a picture or screenshot.', 'bad'); return; }
+      input.disabled = true;
+      let worker = null;
+      try {
+        setStatus('Loading the text reader…');
+        const T = await loadTesseract();
+        worker = await T.createWorker('eng', 1, {
+          logger: m => { if (m.status === 'recognizing text') setStatus(`Reading the picture… ${Math.round((m.progress || 0) * 100)}%`); }
+        });
+        setStatus('Reading the picture…');
+        const { data } = await worker.recognize(file);
+        const found = parseMedLabelText(data && data.text);
+        const filled = fillMedFormFromScan(found);
+        if (filled.length) {
+          setStatus(`Filled in: ${filled.join(', ')}. Check these (they have a green outline) and fill in the rest.`, 'good');
+        } else {
+          setStatus('Could not find medication details in this picture. Try a clearer or closer screenshot, or fill in the form by hand.', 'bad');
+        }
+      } catch (err) {
+        console.warn('Medication scan failed', err);
+        setStatus(navigator.onLine === false
+          ? 'The text reader needs an internet connection the first time. Connect and try again.'
+          : 'Could not read this picture. Try again, or fill in the form by hand.', 'bad');
+      } finally {
+        if (worker) worker.terminate().catch(() => {});
+        input.disabled = false;
+      }
+    }
+
+    // Puts scanned values only into empty fields, so nothing already typed is replaced
+    function fillMedFormFromScan(found) {
+      const form = document.getElementById('modalFormFields');
+      if (!form) return [];
+      const labels = { name: 'name', dosage: 'dosage', frequency: 'schedule', supplyLeft: 'pills left', supplyPerDay: 'taken per day', doctor: 'prescriber', purpose: 'reason', notes: 'notes' };
+      const filled = [];
+      Object.keys(labels).forEach(key => {
+        const v = found[key];
+        const el = form.querySelector(`[name="${key}"]`);
+        if (v === undefined || v === null || v === '' || !el) return;
+        if (key === 'notes' && el.value.trim()) {
+          if (el.value.includes(v)) return;
+          el.value = `${el.value.trim()}\n${v}`;
+        } else if (el.value.trim()) {
+          return;
+        } else {
+          el.value = String(v);
+        }
+        el.classList.add('ring-2', 'ring-emerald-400');
+        el.addEventListener('input', () => el.classList.remove('ring-2', 'ring-emerald-400'), { once: true });
+        filled.push(labels[key]);
+      });
+      if (found.name && filled.includes('name')) autoSuggestMedCategory(found.name);
+      const typeSelect = document.getElementById('medTypeSelect');
+      if (found.medType && typeSelect && !typeSelect.dataset.manuallyChanged) typeSelect.value = found.medType;
+      return filled;
     }
 
     function autoMigrateMedicationCategories() {
@@ -5988,6 +6200,8 @@ const DB_NAME = 'MediVault_Docs_DB';
       if (currentMedFilter === 'past') list = list.filter(m => m.status === 'past');
       if (currentMedTypeFilter === 'Prescribed') list = list.filter(m => (m.medType || m.type || 'Prescribed') === 'Prescribed');
       if (currentMedTypeFilter === 'OTC') list = list.filter(m => (m.medType || m.type) === 'OTC');
+      // Keep current medications on top and move past ones to the bottom
+      list = [...list].sort((x, y) => (x.status === 'past') - (y.status === 'past'));
 
       const container = document.getElementById('medicationsList');
       if (list.length === 0) {
@@ -6005,7 +6219,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <div>
                   <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                     <span class="tag-badge ${isActive ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'} text-[10px]">
-                      ${isActive ? '<span style="color: var(--success); position: relative; left: -2px">●</span> CURRENT' : '○ PAST'}
+                      ${isActive ? '<span style="color: var(--success); position: relative; left: -2px">●</span> CURRENT' : '<span style="color: var(--danger); position: relative; left: -2px">●</span> PAST'}
                     </span>
                     <span class="tag-badge ${isOTC ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800' : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'} text-[10px] font-bold">
                       ${isOTC ? 'OTC' : 'Prescribed'}
@@ -7896,6 +8110,20 @@ const DB_NAME = 'MediVault_Docs_DB';
           const defaultCategory = data.category || detectMedCategory(data.name, data.purpose) || 'General';
 
           fieldsContainer.innerHTML = `
+            <div class="p-3 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-2xl border border-dashed border-emerald-300 dark:border-emerald-800">
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <p class="text-xs font-bold text-emerald-900 dark:text-emerald-200">Fill in from a screenshot</p>
+                  <p class="text-[11px] text-emerald-800/80 dark:text-emerald-300/80">Pick a photo of the label or a pharmacy app screenshot. The picture stays on this device.</p>
+                </div>
+                <label id="medScanBtn" class="shrink-0 cursor-pointer px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
+                  Upload
+                  <input type="file" accept="image/*" class="hidden" onchange="scanMedicationImage(this)">
+                </label>
+              </div>
+              <p id="medScanStatus" class="hidden"></p>
+            </div>
+
             <div>
               <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Medication Name *</label>
               <input type="text" id="medNameInput" name="name" required value="${escapeHtml(data.name || '')}" oninput="autoSuggestMedCategory(this.value)" placeholder="e.g., Zoloft, Omeprazole, Levothyroxine" class="w-full text-xs font-bold px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-800 dark:text-slate-100 focus:border-purple-500">
@@ -9113,7 +9341,18 @@ const DB_NAME = 'MediVault_Docs_DB';
     /* =====================================================================
        HELPERS & UTILITIES
        ===================================================================== */
-    function openModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      // Always start a form at the top, not where it was scrolled to last time
+      const toTop = () => {
+        el.scrollTop = 0;
+        el.querySelectorAll('*').forEach(child => { if (child.scrollTop) child.scrollTop = 0; });
+      };
+      toTop();
+      requestAnimationFrame(toTop);
+    }
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
