@@ -111,6 +111,14 @@
   
           </style>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    // iPhone and iPad zoom in when you tap a text box with small text. This stops that zoom.
+    // (iOS still lets you pinch to zoom; other phones do not do this zoom, so they are left alone.)
+    (function () {
+      var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (ios) document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0');
+    })();
+  </script>
   <title>All in One</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon.png">
@@ -4008,8 +4016,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       const container = document.getElementById(containerId);
       if (!container) return;
 
-      // Keep current medications on top and move past ones to the bottom
-      const meds = [...getCategoryMedications(category)].sort((x, y) => (x.status === 'past') - (y.status === 'past'));
+      const meds = [...getCategoryMedications(category)].sort(medListOrder);
 
       if (meds.length === 0) {
         container.innerHTML = `
@@ -5632,6 +5639,12 @@ const DB_NAME = 'MediVault_Docs_DB';
     // (supplyDate) and how many are taken a day (supplyPerDay); what is left today is worked out from those
     const REFILL_LEAD_DAYS = 7;
 
+    // Medication list order: current before past, and within each, prescribed before over-the-counter
+    function medListOrder(x, y) {
+      const isOTC = m => (m.medType || m.type) === 'OTC';
+      return ((x.status === 'past') - (y.status === 'past')) || (isOTC(x) - isOTC(y));
+    }
+
     function medSupplyInfo(m) {
       if (!m || m.supplyCount === null || m.supplyCount === undefined || m.supplyCount === '' || !m.supplyDate) return null;
       const count = Number(m.supplyCount);
@@ -5994,7 +6007,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       renderReminderBanner();
       renderRefillBanner();
       renderDashboardAppointments();
-      const activeMeds = state.medications.filter(m => m.status === 'active');
+      const activeMeds = state.medications.filter(m => m.status === 'active').sort(medListOrder);
       const medsListEl = document.getElementById('dash-active-meds-list');
       if (activeMeds.length === 0) {
         medsListEl.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">No active medications listed. <button onclick="openAddModal('medications', { status: 'active' })" class="text-purple-600 font-bold underline">Add one</button></div>`;
@@ -6200,8 +6213,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       if (currentMedFilter === 'past') list = list.filter(m => m.status === 'past');
       if (currentMedTypeFilter === 'Prescribed') list = list.filter(m => (m.medType || m.type || 'Prescribed') === 'Prescribed');
       if (currentMedTypeFilter === 'OTC') list = list.filter(m => (m.medType || m.type) === 'OTC');
-      // Keep current medications on top and move past ones to the bottom
-      list = [...list].sort((x, y) => (x.status === 'past') - (y.status === 'past'));
+      list = [...list].sort(medListOrder);
 
       const container = document.getElementById('medicationsList');
       if (list.length === 0) {
