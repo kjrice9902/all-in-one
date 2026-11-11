@@ -160,6 +160,26 @@
     .tag-badge { display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
     .medical-bg-watermark { opacity: 0.035; transition: opacity 0.2s ease-in-out; }
     .dark .medical-bg-watermark { opacity: 0.055; }
+    /* Category pages (opened from the dashboard): card names are large and bold, so you see what each one is at once.
+       Long names wrap to two lines instead of being cut off after a few words. */
+    html :is(#view-surgeries, #view-dental, #view-rheumatology, #view-mental, #view-vaccines, #view-specialty, #view-urology) h2.text-2xl {
+      font-size: 2.125rem !important;
+      line-height: 1.1 !important;
+      font-weight: 900 !important;
+      letter-spacing: -0.02em;
+    }
+    html :is(#view-surgeries, #view-dental, #view-rheumatology, #view-mental, #view-vaccines, #view-specialty, #view-urology) .card-title {
+      font-size: 1.125rem !important;
+      line-height: 1.35 !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.01em;
+      white-space: normal !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
     @media print {
       body.printing-summary:has(> #medicalSummaryModal:not(.hidden)) > *:not(#medicalSummaryModal) { display: none !important; }
       body.printing-summary #medicalSummaryModal:not(.hidden) { position: static !important; display: block !important; background: none !important; overflow: visible !important; }
@@ -4103,7 +4123,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                       ${isOTC ? 'OTC' : 'Rx'}
                     </span>
                   </div>
-                  <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${escapeHtml(m.name)}</h4>
+                  <h4 class="card-title text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${escapeHtml(m.name)}</h4>
                 </div>
                 <button onclick="openEditModal('medications', ${jsAttr(m.id)})" title="Edit Medication" class="p-1 text-slate-400 hover:text-indigo-600 rounded">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
@@ -4518,7 +4538,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                   ${daysLeft === 999 ? 'No date' : (daysLeft === 0 ? 'Today' : (daysLeft > 0 ? `${daysLeft}d away` : 'Past'))}
                 </span>
               </div>
-              <h4 onclick="openEditModal('appointments', ${jsAttr(a.id)})" class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 cursor-pointer truncate" title="${escapeHtml(a.title)}">
+              <h4 onclick="openEditModal('appointments', ${jsAttr(a.id)})" class="card-title text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 cursor-pointer truncate" title="${escapeHtml(a.title)}">
                 ${escapeHtml(a.title)}
               </h4>
               <p class="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5">${formatDate(a.date)} ${a.time ? `• ${escapeHtml(a.time)}` : ''}</p>
@@ -4736,7 +4756,7 @@ const DB_NAME = 'MediVault_Docs_DB';
           grid.insertAdjacentHTML('beforeend', `
             <div data-custom-specialty="1" onclick="openCustomSpecialty(${jsAttr(c.name)})" class="cursor-pointer bg-white dark:bg-slate-900 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 border border-slate-200/80 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-800 rounded-2xl p-4 transition shadow-sm hover:shadow-md group">
               <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-pink-400 flex items-center justify-center text-white text-lg mb-3 shadow-sm group-hover:scale-105 transition-transform">${icon(c.icon || 'stethoscope')}</div>
-              <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 truncate">${escapeHtml(c.name)}</h4>
+              <h4 class="card-title text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 truncate">${escapeHtml(c.name)}</h4>
               <p id="dash-stat-custom-${i}" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">0 records</p>
             </div>`);
         });
@@ -6706,7 +6726,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                   <span class="${isUpcoming && daysRemaining >= 0 && daysRemaining !== 999 ? 'days-away ' : ''}tag-badge ${isUpcoming ? 'bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'} text-[10px]">
                     ${isUpcoming ? `UPCOMING (${daysRemaining === 999 ? 'No date' : daysRemaining >= 0 ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} away` : 'Past'})` : 'PAST / COMPLETED'}
                   </span>
-                  <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(s.name)}</h3>
+                  <h3 class="card-title text-base font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(s.name)}</h3>
                 </div>
               </div>
               <button onclick="openEditModal('surgeries', ${jsAttr(s.id)})" class="p-1.5 text-slate-400 hover:text-orange-600 rounded-lg">
@@ -6768,7 +6788,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <span class="tag-badge bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 text-[10px]">${formatDate(d.date, 'No date')}</span>
                 ${d.toothNumber ? `<span class="tag-badge bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px]">Tooth: ${escapeHtml(d.toothNumber)}</span>` : ''}
               </div>
-              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(d.procedure)}</h3>
+              <h3 class="card-title text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(d.procedure)}</h3>
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Dentist: <span class="font-medium text-slate-700 dark:text-slate-200">${escapeHtml(d.dentist || 'N/A')}</span> (${escapeHtml(d.clinic || '')})</p>
             </div>
             <button onclick="openEditModal('dental', ${jsAttr(d.id)})" class="p-1.5 text-slate-400 hover:text-cyan-600 rounded-lg">
@@ -6815,7 +6835,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <span class="tag-badge bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px]">${formatDate(g.date, 'No date')}</span>
                 ${g.severity ? `<span class="tag-badge bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 text-[10px]">${escapeHtml(g.severity)}</span>` : ''}
               </div>
-              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(g.event)}</h3>
+              <h3 class="card-title text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(g.event)}</h3>
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Specialist: ${escapeHtml(g.specialist || 'Rheumatologist')}</p>
             </div>
             <button onclick="openEditModal('rheumatology', ${jsAttr(g.id)})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg">
@@ -6869,7 +6889,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <span class="tag-badge bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 text-[10px]">${formatDate(m.date, 'No date')}</span>
                 ${m.moodScale ? `<span class="tag-badge bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px]">Mood: ${escapeHtml(m.moodScale)}</span>` : ''}
               </div>
-              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(m.type || 'Session')}</h3>
+              <h3 class="card-title text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(m.type || 'Session')}</h3>
               ${m.provider ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">With: ${escapeHtml(m.provider)}</p>` : ''}
             </div>
             <button onclick="openEditModal('mental', ${jsAttr(m.id)})" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg">
@@ -6902,7 +6922,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
               </button>
             </div>
-            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">${escapeHtml(v.name)}</h3>
+            <h3 class="card-title text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">${escapeHtml(v.name)}</h3>
             ${v.dose ? `<p class="text-xs text-teal-700 dark:text-teal-400 font-medium mt-0.5">${escapeHtml(v.dose)}</p>` : ''}
             <div class="mt-3 text-xs space-y-1 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/60">
               ${v.clinic ? `<div class="flex justify-between text-slate-500 dark:text-slate-400"><span>Clinic:</span><span class="text-slate-800 dark:text-slate-200">${escapeHtml(v.clinic)}</span></div>` : ''}
@@ -6945,7 +6965,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                     <span class="tag-badge bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 text-[10px]">${formatDate(u.date, 'No date')}</span>
                     ${u.findings ? `<span class="tag-badge bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px]">${escapeHtml(u.findings)}</span>` : ''}
                   </div>
-                  <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(u.title || u.procedure || 'Urological Evaluation')}</h3>
+                  <h3 class="card-title text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">${escapeHtml(u.title || u.procedure || 'Urological Evaluation')}</h3>
                   <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Provider: <span class="font-medium text-slate-700 dark:text-slate-200">${escapeHtml(u.doctor || 'N/A')}</span>
                     ${u.facility || u.clinic ? ` (${escapeHtml(u.facility || u.clinic)})` : ''}
@@ -6994,7 +7014,7 @@ const DB_NAME = 'MediVault_Docs_DB';
             <div class="flex items-center space-x-2">
               ${c.photoUrl ? `<img src="${escapeHtml(c.photoUrl)}" alt="${escapeHtml(c.name)}" class="w-8 h-8 rounded-full object-cover border-2 border-sky-400">` : ''}
               <div>
-                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition">${escapeHtml(c.name)}</h4>
+                <h4 class="card-title text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition">${escapeHtml(c.name)}</h4>
                 <p class="text-xs text-sky-700 dark:text-sky-400 font-semibold">${escapeHtml(c.specialty)}</p>
               </div>
             </div>
