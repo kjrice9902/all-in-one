@@ -3625,6 +3625,11 @@ const DB_NAME = 'MediVault_Docs_DB';
     /* =====================================================================
        RENDER DOCTORS & CARE TEAM (WITH REAL DOCTOR MANAGEMENT)
        ===================================================================== */
+    // Psychiatry, psychiatrist, psychiatric nurse practitioner, and similar
+    function isPsychiatricDoctor(d) {
+      return /psychiat/i.test(`${d && d.specialty || ''} ${d && d.clinic || ''}`);
+    }
+
     function renderDoctors() {
       if (typeof loadPdfMaker === 'function') loadPdfMaker().catch(() => {});
       const container = document.getElementById('doctorsViewList');
@@ -3650,6 +3655,9 @@ const DB_NAME = 'MediVault_Docs_DB';
 
       // Sort doctors: Doctors with little to no information appear last in the order
       const doctors = [...rawDoctors].sort((a, b) => {
+        // Psychiatrists first
+        const psychDiff = isPsychiatricDoctor(b) - isPsychiatricDoctor(a);
+        if (psychDiff) return psychDiff;
         const scoreA = getDoctorInfoScore(a);
         const scoreB = getDoctorInfoScore(b);
         const aSparse = scoreA <= 1; // Little to no information (at most 0 or 1 auxiliary field)
