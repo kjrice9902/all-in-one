@@ -1853,7 +1853,8 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
       <div class="no-print sticky top-0 z-10 flex items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Medical Summary</span>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="printMedicalSummary()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">Print / Save PDF</button>
+          <button type="button" id="summaryPdfBtn" onclick="saveMedicalSummaryPdf()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">Save / Share PDF</button>
+          <button type="button" id="summaryPrintBtn" onclick="printMedicalSummary()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold">Print</button>
           <button type="button" onclick="closeModal('medicalSummaryModal')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold">Close</button>
         </div>
       </div>
@@ -6181,7 +6182,112 @@ const DB_NAME = 'MediVault_Docs_DB';
         ${d.doctors.length ? table(['Name', 'Specialty', 'Phone', 'Clinic'], d.doctors.map(doc => [escapeHtml(drName(doc.name)), escapeHtml(doc.specialty || ''), escapeHtml(doc.phone || ''), escapeHtml(doc.clinic || '')])) : none('No doctors recorded')}
         ${d.upcoming.length ? h('Upcoming appointments') + table(['Date', 'Visit', 'Doctor'], d.upcoming.slice(0, 8).map(a => [escapeHtml(formatDate(a.date) + (a.time ? ' ' + a.time : '')), escapeHtml(a.title || ''), escapeHtml(a.doctor ? drName(a.doctor) : '')])) : ''}
       `;
+      // iPhone and iPad home-screen apps can't open the print window; their share sheet has Print instead
+      const printBtn = document.getElementById('summaryPrintBtn');
+      if (printBtn) printBtn.classList.toggle('hidden', isAppleTouchDevice());
+      loadPdfMaker().catch(() => {});   // get it ready now, so Save / Share opens right after the tap
       openModal('medicalSummaryModal');
+    }
+
+    /* ---------- Medical Summary as a PDF file (made on the device with jsPDF, stored in vendor/jspdf) ---------- */
+    let pdfMakerLoading = null;
+    function loadPdfMaker() {
+      if (window.jspdf && window.jspdf.jsPDF && typeof window.autoTable === 'function') return Promise.resolve();
+      if (!pdfMakerLoading) {
+        const add = src => new Promise((resolve, reject) => {
+          const el = document.createElement('script');
+          el.src = src;
+          el.onload = resolve;
+          el.onerror = () => { el.remove(); reject(new Error('Could not load ' + src)); };
+          document.head.appendChild(el);
+        });
+        pdfMakerLoading = add('vendor/jspdf/jspdf.umd.min.js')
+          .then(() => add('vendor/jspdf/jspdf.plugin.autotable.min.js'))
+          .catch(err => { pdfMakerLoading = null; throw err; });
+      }
+      return pdfMakerLoading;
+    }
+
+    // The built-in PDF fonts only have Western letters: swap smart quotes and dashes, and mark anything else
+    function pdfText(v) {
+      return String(v == null ? '' : v)
+        .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u2026/g, '...')
+        .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
+    }
+
+    function buildMedicalSummaryPdf() {
+      const d = summaryData();
+      const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+      const margin = 40;
+      const pageW = doc.internal.pageSize.getWidth();
+      let y = margin;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+      doc.text(pdfText(d.name || 'Medical Summary'), margin, y + 6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100);
+      doc.text(pdfText('Medical summary - made ' + formatDate(localISODate())), margin, y + 22);
+      const info = [d.blood ? 'Blood type: ' + d.blood : '', (d.contactName || d.contactPhone) ? 'Emergency contact: ' + [d.contactName, d.contactPhone].filter(Boolean).join(', ') : ''].filter(Boolean);
+      doc.setTextColor(20); doc.setFontSize(10);
+      info.forEach((line, i) => doc.text(pdfText(line), pageW - margin, y + 6 + i * 14, { align: 'right' }));
+      y += 40;
+      const section = (title, head, rows, emptyText) => {
+        if (!rows.length && !emptyText) return;
+        if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = margin; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(67, 56, 202);
+        doc.text(title.toUpperCase(), margin, y + 12);
+        doc.setDrawColor(210); doc.line(margin, y + 16, pageW - margin, y + 16);
+        y += 22;
+        doc.setTextColor(20);
+        if (!rows.length) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110);
+          doc.text(emptyText, margin, y + 10);
+          y += 24;
+          return;
+        }
+        window.autoTable(doc, {
+          startY: y, head: [head], body: rows.map(r => r.map(c => pdfText(c) || '-')),
+          margin: { left: margin, right: margin }, theme: 'plain',
+          styles: { fontSize: 9, cellPadding: 4, textColor: 20, overflow: 'linebreak' },
+          headStyles: { fontStyle: 'bold', textColor: 100 },
+          columnStyles: { 0: { fontStyle: 'bold' } },
+          didDrawCell: data => {
+            if (data.section === 'body' && data.column.index === 0) {
+              doc.setDrawColor(230); doc.line(margin, data.cell.y, pageW - margin, data.cell.y);
+            }
+          }
+        });
+        y = doc.lastAutoTable.finalY + 18;
+      };
+      const isOTC = m => (m.medType || m.type) === 'OTC';
+      section('Allergies', ['Allergen', 'Reaction', 'Severity'], d.allergies.map(a => [a.allergen, a.reaction, a.severity]), 'No known allergies recorded');
+      section('Current medications', ['Medication', 'Dose', 'How often', 'Type', 'Prescriber', 'Reason'], d.currentMeds.map(m => [m.name, m.dosage, m.frequency, isOTC(m) ? 'OTC' : 'Rx', m.doctor, m.purpose]), 'No current medications recorded');
+      section('Past medications', ['Medication', 'Dose', 'Stopped', 'Reason'], d.pastMeds.map(m => [m.name, m.dosage, m.endDate ? formatDate(m.endDate) : '', m.purpose]));
+      section('Surgeries & procedures', ['Procedure', 'Date', 'Status', 'Surgeon / facility'], d.surgeries.map(x => [x.name || x.procedure, x.date ? formatDate(x.date) : '', x.status === 'upcoming' ? 'Upcoming' : 'Done', [x.surgeon, x.facility].filter(Boolean).join(', ')]));
+      section('Vaccines', ['Vaccine', 'Date', 'Dose'], d.vaccines.map(v => [v.name || v.title, v.date ? formatDate(v.date) : '', v.dose]));
+      section('Doctors', ['Name', 'Specialty', 'Phone', 'Clinic'], d.doctors.map(doc2 => [drName(doc2.name), doc2.specialty, doc2.phone, doc2.clinic]), 'No doctors recorded');
+      section('Upcoming appointments', ['Date', 'Visit', 'Doctor'], d.upcoming.slice(0, 8).map(a => [formatDate(a.date) + (a.time ? ' ' + a.time : ''), a.title, a.doctor ? drName(a.doctor) : '']));
+      const pages = doc.getNumberOfPages();
+      for (let i = 1; i <= pages; i++) {
+        doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
+        doc.text(`Page ${i} of ${pages}`, pageW - margin, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
+      }
+      return doc.output('blob');
+    }
+
+    async function saveMedicalSummaryPdf() {
+      const btn = document.getElementById('summaryPdfBtn');
+      if (btn) btn.disabled = true;
+      try {
+        await loadPdfMaker();
+        const blob = buildMedicalSummaryPdf();
+        const who = (state.settings.patientName || '').trim().replace(/[^A-Za-z0-9 _-]+/g, '').trim();
+        const name = `Medical Summary${who ? ' - ' + who : ''} ${localISODate()}.pdf`;
+        await promptSaveFile(blob, name, 'application/pdf');
+      } catch (err) {
+        console.warn('Medical summary PDF failed', err);
+        showToast('Could not make the PDF. Please try again.');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     function printMedicalSummary() {
