@@ -1,7 +1,7 @@
 // Offline support for the hosted (https) copy of All in One.
 // Network first so updates show up right away; the cached copy is used when there is no connection.
 // Only the app's own files are cached — records and documents stay in the browser's own storage.
-const CACHE = 'all-in-one-20261111062434';
+const CACHE = 'all-in-one-20261111063721';
 const NETWORK_TIMEOUT_MS = 5000;
 const CALENDAR_CACHE = 'all-in-one-calendar';
 const APP_FILES = [
