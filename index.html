@@ -4145,6 +4145,8 @@ const DB_NAME = 'MediVault_Docs_DB';
        (Tesseract.js) downloads the first time it is used.
        ===================================================================== */
     const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    // Fingerprint of that exact file: the browser refuses to run it if even one byte was changed
+    const TESSERACT_SRI = 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F';
     let tesseractLoading = null;
 
     function loadTesseract() {
@@ -4153,6 +4155,8 @@ const DB_NAME = 'MediVault_Docs_DB';
         tesseractLoading = new Promise((resolve, reject) => {
           const s = document.createElement('script');
           s.src = TESSERACT_URL;
+          s.integrity = TESSERACT_SRI;
+          s.crossOrigin = 'anonymous';
           s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('Text reader did not load'));
           s.onerror = () => { tesseractLoading = null; s.remove(); reject(new Error('Text reader did not load')); };
           document.head.appendChild(s);
