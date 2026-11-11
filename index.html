@@ -9341,7 +9341,18 @@ const DB_NAME = 'MediVault_Docs_DB';
     /* =====================================================================
        HELPERS & UTILITIES
        ===================================================================== */
-    function openModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      // Always start a form at the top, not where it was scrolled to last time
+      const toTop = () => {
+        el.scrollTop = 0;
+        el.querySelectorAll('*').forEach(child => { if (child.scrollTop) child.scrollTop = 0; });
+      };
+      toTop();
+      requestAnimationFrame(toTop);
+    }
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
