@@ -160,6 +160,13 @@
     .tag-badge { display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
     .medical-bg-watermark { opacity: 0.035; transition: opacity 0.2s ease-in-out; }
     .dark .medical-bg-watermark { opacity: 0.055; }
+    @media print {
+      body.printing-summary:has(> #medicalSummaryModal:not(.hidden)) > *:not(#medicalSummaryModal) { display: none !important; }
+      body.printing-summary #medicalSummaryModal:not(.hidden) { position: static !important; display: block !important; background: none !important; overflow: visible !important; }
+      body.printing-summary #medicalSummaryModal { padding: 0 !important; }
+      body.printing-summary #medicalSummaryModal > div { box-shadow: none !important; margin: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: none !important; border-radius: 0 !important; }
+      #medicalSummaryContent table { page-break-inside: auto; } #medicalSummaryContent tr { page-break-inside: avoid; }
+    }
     @media print { .no-print { display: none !important; } .print-only { display: block !important; } body { background: white !important; color: black !important; } html.dark body * { color: #111 !important; border-color: #ccc !important; } html.dark body *:not(img):not(svg) { background-color: transparent !important; background-image: none !important; } }
 
       </style>
@@ -806,6 +813,18 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
         </div>
       </div>
 
+      <!-- Emergency screen & printable summary -->
+      <div class="grid grid-cols-2 gap-3 no-print">
+        <button type="button" onclick="openEmergencyInfo()" class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-left shadow-sm transition">
+          <svg class="ico" aria-hidden="true"><use href="#i-urgent"/></svg>
+          <span><span class="block text-xs font-extrabold">Emergency Info</span><span class="block text-[10px] opacity-90">Allergies, meds, contacts</span></span>
+        </button>
+        <button type="button" onclick="openMedicalSummary()" class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 text-left shadow-sm transition">
+          <svg class="ico text-indigo-600 dark:text-indigo-400" aria-hidden="true"><use href="#i-file-text"/></svg>
+          <span><span class="block text-xs font-extrabold text-slate-900 dark:text-slate-100">Medical Summary</span><span class="block text-[10px] text-slate-500 dark:text-slate-400">One page to print or show</span></span>
+        </button>
+      </div>
+
       <!-- Quick Specialty Cards Grid -->
       <div id="dashSpecialtyGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div onclick="switchTab('dental')" class="cursor-pointer bg-white dark:bg-slate-900 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/20 border border-slate-200/80 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-cyan-800 rounded-2xl p-4 transition shadow-sm hover:shadow-md group">
@@ -989,6 +1008,11 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
         </div>
       </div>
 
+      <div class="relative no-print">
+        <svg class="ico absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" id="aptSearchInput" oninput="renderAppointments()" placeholder="Search appointments by visit, doctor, place, notes…" aria-label="Search appointments by visit, doctor, place, notes…" autocomplete="off" class="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none text-slate-800 dark:text-slate-100 focus:border-indigo-400">
+      </div>
+
       <!-- Appointments List Grid -->
       <div id="appointmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
     </div>
@@ -1034,6 +1058,11 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
             <span id="count-otc-meds" class="tag-badge bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] ml-1">0</span>
           </button>
         </div>
+      </div>
+
+      <div class="relative no-print">
+        <svg class="ico absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" id="medSearchInput" oninput="renderMedications()" placeholder="Search medications by name, dose, doctor, reason…" aria-label="Search medications by name, dose, doctor, reason…" autocomplete="off" class="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none text-slate-800 dark:text-slate-100 focus:border-indigo-400">
       </div>
 
       <!-- Medications Cards Grid -->
@@ -1804,6 +1833,31 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
         <div id="manageSpecialtiesList" class="space-y-1.5"></div>
         <p class="text-[11px] text-slate-400 mt-3">Deleting a specialty is permanent. Its documents are retagged as Other; nothing is deleted.</p>
       </div>
+    </div>
+  </div>
+
+  <!-- Emergency Info: big, simple screen to show a first responder -->
+  <div id="emergencyInfoModal" onclick="if (event.target === this) closeModal('emergencyInfoModal')" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto no-print">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-xl overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6 shadow-2xl">
+      <div class="sticky top-0 z-10 bg-white dark:bg-slate-900 pt-4 sm:pt-6 flex items-center justify-between gap-2 pb-3 border-b-4 border-rose-600">
+        <h2 class="text-xl font-extrabold text-rose-700 dark:text-rose-400 flex items-center gap-2"><svg class="ico" aria-hidden="true"><use href="#i-urgent"/></svg>Emergency Medical Info</h2>
+        <button type="button" onclick="closeModal('emergencyInfoModal')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
+      </div>
+      <div id="emergencyInfoContent" class="pt-4 space-y-5"></div>
+    </div>
+  </div>
+
+  <!-- Medical Summary: one page to print, save as PDF, or show a new doctor -->
+  <div id="medicalSummaryModal" onclick="if (event.target === this) closeModal('medicalSummaryModal')" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl overflow-y-auto shadow-2xl">
+      <div class="no-print sticky top-0 z-10 flex items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Medical Summary</span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="printMedicalSummary()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">Print / Save PDF</button>
+          <button type="button" onclick="closeModal('medicalSummaryModal')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold">Close</button>
+        </div>
+      </div>
+      <div id="medicalSummaryContent" class="p-5 sm:p-8 text-slate-800 dark:text-slate-100"></div>
     </div>
   </div>
 
@@ -3201,6 +3255,8 @@ const DB_NAME = 'MediVault_Docs_DB';
     function switchTab(tabId) {
       // A tab that no longer exists (deleted, or an unknown start page from an edited backup) opens the dashboard
       if (isTabDeleted(tabId) || !document.getElementById(`view-${tabId}`)) tabId = 'dashboard';
+      // A search is for the page it was typed on: start fresh when coming back
+      if (tabId !== currentTab) ['medSearchInput', 'aptSearchInput'].forEach(sid => { const box = document.getElementById(sid); if (box) box.value = ''; });
       currentTab = tabId;
       const views = ['dashboard', 'appointments', 'medications', 'surgeries', 'dental', 'rheumatology', 'mental', 'vaccines', 'urology', 'specialty', 'vault', 'doctors', 'everything'];
       document.querySelectorAll('#customSpecialtyNav .nav-tab').forEach(navEl => {
@@ -4149,11 +4205,10 @@ const DB_NAME = 'MediVault_Docs_DB';
        Reads the text in a photo or screenshot of a medication label or
        pharmacy app on this device (the picture is not sent anywhere) and
        fills in the empty form fields it can find. The text reader
-       (Tesseract.js) downloads the first time it is used.
+       (Tesseract.js) is stored with the app in vendor/tesseract.
        ===================================================================== */
-    const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-    // Fingerprint of that exact file: the browser refuses to run it if even one byte was changed
-    const TESSERACT_SRI = 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F';
+    // The text reader is stored with the app (vendor/tesseract), so nothing is loaded from other sites
+    const TESSERACT_DIR = new URL('vendor/tesseract/', location.href).href;
     let tesseractLoading = null;
 
     function loadTesseract() {
@@ -4161,9 +4216,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       if (!tesseractLoading) {
         tesseractLoading = new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = TESSERACT_URL;
-          s.integrity = TESSERACT_SRI;
-          s.crossOrigin = 'anonymous';
+          s.src = TESSERACT_DIR + 'tesseract.min.js';
           s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('Text reader did not load'));
           s.onerror = () => { tesseractLoading = null; s.remove(); reject(new Error('Text reader did not load')); };
           document.head.appendChild(s);
@@ -4259,6 +4312,7 @@ const DB_NAME = 'MediVault_Docs_DB';
           left = Math.max(0, Math.round((qtyNum - out.supplyPerDay * days) * 100) / 100);
         }
         out.supplyLeft = left;
+        out.refillQty = qtyNum;
       }
 
       // Prescriber
@@ -4305,6 +4359,10 @@ const DB_NAME = 'MediVault_Docs_DB';
         setStatus('Loading the text reader…');
         const T = await loadTesseract();
         worker = await T.createWorker('eng', 1, {
+          workerPath: TESSERACT_DIR + 'worker.min.js',
+          corePath: TESSERACT_DIR,
+          langPath: TESSERACT_DIR,
+          workerBlobURL: false,
           logger: m => { if (m.status === 'recognizing text') setStatus(`Reading the picture… ${Math.round((m.progress || 0) * 100)}%`); }
         });
         setStatus('Reading the picture…');
@@ -4319,7 +4377,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       } catch (err) {
         console.warn('Medication scan failed', err);
         setStatus(navigator.onLine === false
-          ? 'The text reader needs an internet connection the first time. Connect and try again.'
+          ? 'The text reader could not load without internet. Connect and try again.'
           : 'Could not read this picture. Try again, or fill in the form by hand.', 'bad');
       } finally {
         if (worker) worker.terminate().catch(() => {});
@@ -4349,6 +4407,8 @@ const DB_NAME = 'MediVault_Docs_DB';
         el.addEventListener('input', () => el.classList.remove('ring-2', 'ring-emerald-400'), { once: true });
         filled.push(labels[key]);
       });
+      const refillEl = form.querySelector('[name="refillQty"]');
+      if (found.refillQty && refillEl && !refillEl.value) refillEl.value = String(found.refillQty);
       if (found.name && filled.includes('name')) autoSuggestMedCategory(found.name);
       const typeSelect = document.getElementById('medTypeSelect');
       if (found.medType && typeSelect && !typeSelect.dataset.manuallyChanged) typeSelect.value = found.medType;
@@ -5419,7 +5479,13 @@ const DB_NAME = 'MediVault_Docs_DB';
         list = list.filter(a => a.status === currentAptStatusFilter);
       }
       list = sortAppointmentsByDate(list);
+      const aptQuery = (document.getElementById('aptSearchInput')?.value || '').trim().toLowerCase();
+      if (aptQuery) list = list.filter(a => matchesSearch(aptQuery, [a.title, a.doctor, a.specialty, a.location, a.notes, a.format, a.telehealthLink, a.arrivalNotes, getAppointmentAddress(a), ...(a.questions || []).map(q => q.text)]));
 
+      if (list.length === 0 && aptQuery) {
+        container.innerHTML = `<div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-400 text-xs">No appointments match "${escapeHtml(aptQuery)}".</div>`;
+        return;
+      }
       if (list.length === 0) {
         container.innerHTML = `
           <div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
@@ -5495,9 +5561,10 @@ const DB_NAME = 'MediVault_Docs_DB';
 
               ${a.notes ? `
               <div class="mt-2 text-xs text-slate-600 dark:text-slate-400 bg-indigo-50/40 dark:bg-indigo-950/20 p-2.5 rounded-lg border border-indigo-100/50 dark:border-indigo-900/30">
-                <span class="text-slate-400 text-[10px] uppercase font-bold block">Topics & Questions to Ask:</span>
+                <span class="text-slate-400 text-[10px] uppercase font-bold block">Notes:</span>
                 <p class="mt-0.5">${escapeHtml(a.notes)}</p>
               </div>` : ''}
+              ${renderAptQuestions(a)}
               ${renderAptCalendarRow(a)}
             </div>
 
@@ -5639,6 +5706,12 @@ const DB_NAME = 'MediVault_Docs_DB';
     // (supplyDate) and how many are taken a day (supplyPerDay); what is left today is worked out from those
     const REFILL_LEAD_DAYS = 7;
 
+    // True when every word typed appears somewhere in the record's fields
+    function matchesSearch(query, fields) {
+      const hay = fields.filter(Boolean).join(' ').toLowerCase();
+      return query.split(/\s+/).filter(Boolean).every(word => hay.includes(word));
+    }
+
     // Medication list order: current before past, and within each, prescribed before over-the-counter
     function medListOrder(x, y) {
       const isOTC = m => (m.medType || m.type) === 'OTC';
@@ -5688,6 +5761,9 @@ const DB_NAME = 'MediVault_Docs_DB';
       }
       delete values.supplyLeft;
       delete values.supplyLeftShown;
+      const refill = parseFloat(values.refillQty);
+      if (refill > 0) values.refillQty = refill;
+      else delete values.refillQty;
     }
 
     function getDueRefills() {
@@ -5734,7 +5810,10 @@ const DB_NAME = 'MediVault_Docs_DB';
       const m = (state.medications || []).find(x => x.id === id);
       const supply = medSupplyInfo(m);
       if (!supply) return;
-      const answer = prompt(`How many ${m.name} do you have now, counting the new refill?`, '');
+      // Suggest what's left plus the usual refill amount, so most refills are just "OK"
+      const usual = parseFloat(m.refillQty);
+      const suggest = usual > 0 ? String(Math.round((supply.left + usual) * 100) / 100) : '';
+      const answer = prompt(`How many ${m.name} do you have now, counting the new refill?${usual > 0 ? `\n(About ${supply.left} left + ${usual} in a usual refill)` : ''}`, suggest);
       if (answer === null) return;
       const count = parseFloat(answer);
       if (!Number.isFinite(count) || count < 0) {
@@ -5742,6 +5821,10 @@ const DB_NAME = 'MediVault_Docs_DB';
         return;
       }
       const before = JSON.stringify(state);
+      // Remember how many a refill adds, for the next time
+      // (A partial fill or a count correction adds much less than usual, so it does not replace the usual amount)
+      const added = Math.round((count - supply.left) * 100) / 100;
+      if (added > 0 && (!(usual > 0) || added >= usual * 0.5)) m.refillQty = added;
       m.supplyCount = count;
       m.supplyDate = localISODate();
       delete m.refillDismissedFor;
@@ -5991,6 +6074,173 @@ const DB_NAME = 'MediVault_Docs_DB';
       });
     }
 
+    /* =====================================================================
+       EMERGENCY INFO SCREEN & ONE-PAGE MEDICAL SUMMARY
+       Both only read the saved records; they never change anything.
+       ===================================================================== */
+    // Sortable YYYY-MM-DD text for a saved date (older records can be MM/DD/YYYY)
+    function sortableDate(v) {
+      const str = String(v || '').trim();
+      const md = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (md) return `${md[3]}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
+      return str;
+    }
+
+    function summaryData() {
+      const st = state.settings || {};
+      const meds = (state.medications || []).slice().sort(medListOrder);
+      return {
+        name: (st.patientName || '').trim(),
+        blood: (st.bloodType || '').trim(),
+        contactName: (st.emergencyContactName || '').trim(),
+        contactPhone: (st.emergencyContactPhone || '').trim(),
+        allergies: (state.allergies || []).filter(a => a && a.allergen),
+        currentMeds: meds.filter(m => m.status === 'active'),
+        pastMeds: meds.filter(m => m.status === 'past'),
+        doctors: (state.careteam || []).filter(d => d && d.name),
+        surgeries: (state.surgeries || []).filter(x => x && (x.name || x.procedure))
+          .sort((a, b) => sortableDate(b.date).localeCompare(sortableDate(a.date))),
+        vaccines: (state.vaccines || []).filter(v => v && (v.name || v.title))
+          .sort((a, b) => sortableDate(b.date).localeCompare(sortableDate(a.date))),
+        upcoming: sortAppointmentsByDate((state.appointments || []).filter(a => a.status === 'upcoming' && a.date && calculateDaysRemaining(a.date) >= 0))
+      };
+    }
+
+    function medLine(m) {
+      return [m.dosage, m.frequency].filter(Boolean).map(escapeHtml).join(' · ');
+    }
+
+    function openEmergencyInfo() {
+      const d = summaryData();
+      const el = document.getElementById('emergencyInfoContent');
+      const phoneHref = d.contactPhone ? 'tel:' + d.contactPhone.replace(/[^0-9+]/g, '') : '';
+      const section = (title, body) => `<section><h3 class="text-xs font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">${title}</h3>${body}</section>`;
+      const none = text => `<p class="text-base text-slate-500 dark:text-slate-400">${text}</p>`;
+      el.innerHTML = `
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Name</p>
+            <p class="text-2xl font-extrabold text-slate-900 dark:text-white">${escapeHtml(d.name || 'Not set')}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Blood type</p>
+            <p class="text-2xl font-extrabold text-rose-700 dark:text-rose-400">${escapeHtml(d.blood || '—')}</p>
+          </div>
+        </div>
+        ${section('Allergies', d.allergies.length ? `<ul class="space-y-1.5">${d.allergies.map(a => `
+          <li class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-800">
+            <p class="text-lg font-extrabold text-rose-800 dark:text-rose-200">${escapeHtml(a.allergen)}${a.severity ? ` <span class="text-xs font-bold uppercase">(${escapeHtml(a.severity)})</span>` : ''}</p>
+            ${a.reaction ? `<p class="text-sm text-rose-900 dark:text-rose-200">${escapeHtml(a.reaction)}</p>` : ''}
+          </li>`).join('')}</ul>` : none('No known allergies recorded'))}
+        ${section('Current medications', d.currentMeds.length ? `<ul class="divide-y divide-slate-200 dark:divide-slate-800 border-y border-slate-200 dark:border-slate-800">${d.currentMeds.map(m => `
+          <li class="py-2.5">
+            <p class="text-lg font-bold text-slate-900 dark:text-white">${escapeHtml(m.name)}${(m.medType || m.type) === 'OTC' ? ' <span class="text-xs font-semibold text-slate-500">(OTC)</span>' : ''}</p>
+            ${medLine(m) ? `<p class="text-sm text-slate-600 dark:text-slate-300">${medLine(m)}</p>` : ''}
+          </li>`).join('')}</ul>` : none('No current medications recorded'))}
+        ${section('Emergency contact', d.contactName || d.contactPhone ? `
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+            <div><p class="text-lg font-bold text-slate-900 dark:text-white">${escapeHtml(d.contactName || 'Emergency contact')}</p>
+            ${d.contactPhone ? `<p class="text-sm text-slate-600 dark:text-slate-300">${escapeHtml(d.contactPhone)}</p>` : ''}</div>
+            ${phoneHref ? `<a href="${escapeHtml(phoneHref)}" class="px-4 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-base font-extrabold">Call</a>` : ''}
+          </div>` : none('No emergency contact set'))}
+        ${d.doctors.length ? section('Doctors', `<ul class="space-y-1">${d.doctors.slice(0, 6).map(doc => `
+          <li class="flex items-center justify-between gap-2 text-sm">
+            <span><strong class="text-slate-900 dark:text-white">${escapeHtml(drName(doc.name))}</strong>${doc.specialty ? ` <span class="text-slate-500">· ${escapeHtml(doc.specialty)}</span>` : ''}</span>
+            ${doc.phone ? `<a href="tel:${escapeHtml(String(doc.phone).replace(/[^0-9+]/g, ''))}" class="text-indigo-600 dark:text-indigo-400 font-bold shrink-0">${escapeHtml(doc.phone)}</a>` : ''}
+          </li>`).join('')}</ul>`) : ''}
+        ${!d.name || !d.blood || !d.contactPhone ? `<button type="button" onclick="closeModal('emergencyInfoModal'); openSettingsModal()" class="w-full py-2.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300">Add your name, blood type, or emergency contact in Settings</button>` : ''}
+      `;
+      openModal('emergencyInfoModal');
+    }
+
+    function openMedicalSummary() {
+      const d = summaryData();
+      const el = document.getElementById('medicalSummaryContent');
+      const h = title => `<h3 class="mt-6 mb-2 text-sm font-extrabold uppercase tracking-wide text-indigo-700 dark:text-indigo-300 border-b border-slate-200 dark:border-slate-700 pb-1">${title}</h3>`;
+      const none = text => `<p class="text-xs text-slate-500">${text}</p>`;
+      const table = (heads, rows) => `<table class="w-full text-xs border-collapse"><thead><tr>${heads.map(x => `<th class="text-left font-bold text-slate-500 py-1 pr-3">${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr class="border-t border-slate-100 dark:border-slate-800">${r.map((c, i) => `<td class="py-1.5 pr-3 align-top ${i === 0 ? 'font-semibold' : ''}">${c || '—'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      el.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-extrabold">${escapeHtml(d.name || 'Medical Summary')}</h2>
+            <p class="text-xs text-slate-500">Medical summary · made ${escapeHtml(formatDate(localISODate()))}</p>
+          </div>
+          <div class="text-xs text-right space-y-0.5">
+            ${d.blood ? `<p><span class="text-slate-500">Blood type:</span> <strong>${escapeHtml(d.blood)}</strong></p>` : ''}
+            ${d.contactName || d.contactPhone ? `<p><span class="text-slate-500">Emergency contact:</span> <strong>${escapeHtml([d.contactName, d.contactPhone].filter(Boolean).join(' · '))}</strong></p>` : ''}
+          </div>
+        </div>
+        ${h('Allergies')}
+        ${d.allergies.length ? table(['Allergen', 'Reaction', 'Severity'], d.allergies.map(a => [escapeHtml(a.allergen), escapeHtml(a.reaction || ''), escapeHtml(a.severity || '')])) : none('No known allergies recorded')}
+        ${h('Current medications')}
+        ${d.currentMeds.length ? table(['Medication', 'Dose', 'How often', 'Type', 'Prescriber', 'Reason'], d.currentMeds.map(m => [escapeHtml(m.name), escapeHtml(m.dosage || ''), escapeHtml(m.frequency || ''), (m.medType || m.type) === 'OTC' ? 'OTC' : 'Rx', escapeHtml(m.doctor || ''), escapeHtml(m.purpose || '')])) : none('No current medications recorded')}
+        ${d.pastMeds.length ? h('Past medications') + table(['Medication', 'Dose', 'Stopped', 'Reason'], d.pastMeds.map(m => [escapeHtml(m.name), escapeHtml(m.dosage || ''), m.endDate ? escapeHtml(formatDate(m.endDate)) : '', escapeHtml(m.purpose || '')])) : ''}
+        ${d.surgeries.length ? h('Surgeries & procedures') + table(['Procedure', 'Date', 'Status', 'Surgeon / facility'], d.surgeries.map(x => [escapeHtml(x.name || x.procedure), x.date ? escapeHtml(formatDate(x.date)) : '', x.status === 'upcoming' ? 'Upcoming' : 'Done', escapeHtml([x.surgeon, x.facility].filter(Boolean).join(' · '))])) : ''}
+        ${d.vaccines.length ? h('Vaccines') + table(['Vaccine', 'Date', 'Dose'], d.vaccines.map(v => [escapeHtml(v.name || v.title), v.date ? escapeHtml(formatDate(v.date)) : '', escapeHtml(v.dose || '')])) : ''}
+        ${h('Doctors')}
+        ${d.doctors.length ? table(['Name', 'Specialty', 'Phone', 'Clinic'], d.doctors.map(doc => [escapeHtml(drName(doc.name)), escapeHtml(doc.specialty || ''), escapeHtml(doc.phone || ''), escapeHtml(doc.clinic || '')])) : none('No doctors recorded')}
+        ${d.upcoming.length ? h('Upcoming appointments') + table(['Date', 'Visit', 'Doctor'], d.upcoming.slice(0, 8).map(a => [escapeHtml(formatDate(a.date) + (a.time ? ' ' + a.time : '')), escapeHtml(a.title || ''), escapeHtml(a.doctor ? drName(a.doctor) : '')])) : ''}
+      `;
+      openModal('medicalSummaryModal');
+    }
+
+    function printMedicalSummary() {
+      document.body.classList.add('printing-summary');
+      const done = () => { document.body.classList.remove('printing-summary'); window.removeEventListener('afterprint', done); };
+      window.addEventListener('afterprint', done);
+      window.print();
+    }
+
+    /* ---------- Questions to ask at an appointment ----------
+       Add questions any time before the visit, then tick them off during it. */
+    function renderAptQuestions(a) {
+      const qs = Array.isArray(a.questions) ? a.questions : [];
+      const asked = qs.filter(q => q.done).length;
+      return `
+        <div class="mt-2 text-xs bg-amber-50/60 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200/70 dark:border-amber-900/40">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] uppercase font-bold text-amber-800 dark:text-amber-300">Questions to ask${qs.length ? ` · ${asked} of ${qs.length} asked` : ''}</span>
+            <button type="button" onclick="addAptQuestion(${jsAttr(a.id)})" class="text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:underline">+ Add question</button>
+          </div>
+          ${qs.length ? `<ul class="mt-1.5 space-y-1">${qs.map(q => `
+            <li class="flex items-start gap-2">
+              <input type="checkbox" ${q.done ? 'checked' : ''} onchange="toggleAptQuestion(${jsAttr(a.id)}, ${jsAttr(q.id)})" aria-label="Asked" class="mt-0.5 rounded shrink-0">
+              <span class="flex-1 ${q.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}">${escapeHtml(q.text)}</span>
+              <button type="button" onclick="removeAptQuestion(${jsAttr(a.id)}, ${jsAttr(q.id)})" title="Remove question" aria-label="Remove question" class="text-slate-300 hover:text-rose-600 px-1 shrink-0">✕</button>
+            </li>`).join('')}</ul>` : `<p class="text-[11px] text-slate-400 mt-1">No questions yet. Add them as you think of them.</p>`}
+        </div>`;
+    }
+
+    function addAptQuestion(id) {
+      const apt = (state.appointments || []).find(a => a.id === id);
+      if (!apt) return;
+      const text = prompt('What do you want to ask at this appointment?', '');
+      if (text === null || !text.trim()) return;
+      if (!Array.isArray(apt.questions)) apt.questions = [];
+      apt.questions.push({ id: 'q-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: text.trim().slice(0, 500), done: false });
+      saveState();
+      renderActiveTab();
+    }
+
+    function toggleAptQuestion(id, qid) {
+      const apt = (state.appointments || []).find(a => a.id === id);
+      const q = apt && (apt.questions || []).find(x => x.id === qid);
+      if (!q) return;
+      q.done = !q.done;
+      saveState();
+      renderActiveTab();
+    }
+
+    function removeAptQuestion(id, qid) {
+      const apt = (state.appointments || []).find(a => a.id === id);
+      if (!apt || !Array.isArray(apt.questions)) return;
+      const q = apt.questions.find(x => x.id === qid);
+      if (!q || !confirm(`Remove this question?\n\n"${q.text}"`)) return;
+      apt.questions = apt.questions.filter(x => x.id !== qid);
+      saveState();
+      renderActiveTab();
+    }
+
     function toggleAppointmentStatus(id) {
       const apt = (state.appointments || []).find(a => a.id === id);
       if (apt) {
@@ -6214,10 +6464,12 @@ const DB_NAME = 'MediVault_Docs_DB';
       if (currentMedTypeFilter === 'Prescribed') list = list.filter(m => (m.medType || m.type || 'Prescribed') === 'Prescribed');
       if (currentMedTypeFilter === 'OTC') list = list.filter(m => (m.medType || m.type) === 'OTC');
       list = [...list].sort(medListOrder);
+      const medQuery = (document.getElementById('medSearchInput')?.value || '').trim().toLowerCase();
+      if (medQuery) list = list.filter(m => matchesSearch(medQuery, [m.name, m.dosage, m.frequency, m.doctor, m.purpose, m.category, m.notes, m.sideEffects, m.medType || m.type]));
 
       const container = document.getElementById('medicationsList');
       if (list.length === 0) {
-        container.innerHTML = `<div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-400 text-xs">No medications found in this category.</div>`;
+        container.innerHTML = `<div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-400 text-xs">${medQuery ? `No medications match "${escapeHtml(medQuery)}".` : 'No medications found in this category.'}</div>`;
         return;
       }
 
@@ -6268,6 +6520,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                 <button onclick="openEditModal('medications', ${jsAttr(m.id)})" class="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 font-bold text-xs transition flex items-center space-x-1">
                   <span><svg class="ico ico-t" aria-hidden="true"><use href="#i-pencil"/></svg>Edit & Categorize</span>
                 </button>
+                ${isActive && medSupplyInfo(m) ? `<button onclick="markMedRefilled(${jsAttr(m.id)})" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">Refilled</button>` : ''}
                 <button onclick="toggleMedicationStatus(${jsAttr(m.id)})" class="text-[11px] font-semibold ${isActive ? 'text-slate-500 dark:text-slate-400' : 'text-purple-600 dark:text-purple-400'}">
                   ${isActive ? 'Mark as Past' : 'Mark as Current'}
                 </button>
@@ -8106,7 +8359,7 @@ const DB_NAME = 'MediVault_Docs_DB';
             </div>
 
             <div>
-              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Questions to Ask & Preparation Notes</label>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Preparation Notes <span class="font-normal text-slate-400">(add questions with "+ Add question" on the appointment card)</span></label>
               <textarea name="notes" rows="2" placeholder="List symptoms to discuss, questions for doctor, or post-visit summary..." class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-800 dark:text-slate-100">${escapeHtml(data.notes || '')}</textarea>
             </div>
           `;
@@ -8200,6 +8453,7 @@ const DB_NAME = 'MediVault_Docs_DB';
                   <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pills / Doses Left</label>
                   <input type="number" name="supplyLeft" min="0" step="any" inputmode="decimal" value="${shown}" placeholder="e.g., 30" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-800 dark:text-slate-100">
                   <input type="hidden" name="supplyLeftShown" value="${shown}">
+                  <input type="hidden" name="refillQty" value="${escapeHtml(String(data.refillQty || ''))}">
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Taken Per Day</label>
@@ -9368,6 +9622,7 @@ const DB_NAME = 'MediVault_Docs_DB';
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
+      if (id === 'medicalSummaryModal') document.body.classList.remove('printing-summary');
       if (id === 'documentViewerModal') {
         pdfRenderToken++;
         pdfPreviewShown = null;
