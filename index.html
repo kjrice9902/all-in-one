@@ -161,8 +161,8 @@
     .medical-bg-watermark { opacity: 0.035; transition: opacity 0.2s ease-in-out; }
     .dark .medical-bg-watermark { opacity: 0.055; }
     @media print {
-      body.printing-summary > *:not(#medicalSummaryModal) { display: none !important; }
-      body.printing-summary #medicalSummaryModal { position: static !important; display: block !important; background: none !important; overflow: visible !important; }
+      body.printing-summary:has(> #medicalSummaryModal:not(.hidden)) > *:not(#medicalSummaryModal) { display: none !important; }
+      body.printing-summary #medicalSummaryModal:not(.hidden) { position: static !important; display: block !important; background: none !important; overflow: visible !important; }
       body.printing-summary #medicalSummaryModal { padding: 0 !important; }
       body.printing-summary #medicalSummaryModal > div { box-shadow: none !important; margin: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: none !important; border-radius: 0 !important; }
       #medicalSummaryContent table { page-break-inside: auto; } #medicalSummaryContent tr { page-break-inside: avoid; }
@@ -1837,9 +1837,9 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
   </div>
 
   <!-- Emergency Info: big, simple screen to show a first responder -->
-  <div id="emergencyInfoModal" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto no-print">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-xl overflow-y-auto p-4 sm:p-6 shadow-2xl">
-      <div class="flex items-center justify-between gap-2 pb-3 border-b-4 border-rose-600">
+  <div id="emergencyInfoModal" onclick="if (event.target === this) closeModal('emergencyInfoModal')" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto no-print">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-xl overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6 shadow-2xl">
+      <div class="sticky top-0 z-10 bg-white dark:bg-slate-900 pt-4 sm:pt-6 flex items-center justify-between gap-2 pb-3 border-b-4 border-rose-600">
         <h2 class="text-xl font-extrabold text-rose-700 dark:text-rose-400 flex items-center gap-2"><svg class="ico" aria-hidden="true"><use href="#i-urgent"/></svg>Emergency Medical Info</h2>
         <button type="button" onclick="closeModal('emergencyInfoModal')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold">Close</button>
       </div>
@@ -1848,7 +1848,7 @@ html body [data-tint][data-tint][data-tint] :is(.w-8.h-8, .w-9.h-9, .w-10.h-10).
   </div>
 
   <!-- Medical Summary: one page to print, save as PDF, or show a new doctor -->
-  <div id="medicalSummaryModal" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto">
+  <div id="medicalSummaryModal" onclick="if (event.target === this) closeModal('medicalSummaryModal')" class="hidden fixed inset-0 z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto">
     <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl overflow-y-auto shadow-2xl">
       <div class="no-print sticky top-0 z-10 flex items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Medical Summary</span>
@@ -3255,6 +3255,8 @@ const DB_NAME = 'MediVault_Docs_DB';
     function switchTab(tabId) {
       // A tab that no longer exists (deleted, or an unknown start page from an edited backup) opens the dashboard
       if (isTabDeleted(tabId) || !document.getElementById(`view-${tabId}`)) tabId = 'dashboard';
+      // A search is for the page it was typed on: start fresh when coming back
+      if (tabId !== currentTab) ['medSearchInput', 'aptSearchInput'].forEach(sid => { const box = document.getElementById(sid); if (box) box.value = ''; });
       currentTab = tabId;
       const views = ['dashboard', 'appointments', 'medications', 'surgeries', 'dental', 'rheumatology', 'mental', 'vaccines', 'urology', 'specialty', 'vault', 'doctors', 'everything'];
       document.querySelectorAll('#customSpecialtyNav .nav-tab').forEach(navEl => {
@@ -4375,7 +4377,7 @@ const DB_NAME = 'MediVault_Docs_DB';
       } catch (err) {
         console.warn('Medication scan failed', err);
         setStatus(navigator.onLine === false
-          ? 'The text reader is not saved on this device yet. Connect to the internet once and try again.'
+          ? 'The text reader could not load without internet. Connect and try again.'
           : 'Could not read this picture. Try again, or fill in the form by hand.', 'bad');
       } finally {
         if (worker) worker.terminate().catch(() => {});
@@ -5480,6 +5482,10 @@ const DB_NAME = 'MediVault_Docs_DB';
       const aptQuery = (document.getElementById('aptSearchInput')?.value || '').trim().toLowerCase();
       if (aptQuery) list = list.filter(a => matchesSearch(aptQuery, [a.title, a.doctor, a.specialty, a.location, a.notes, a.format, a.telehealthLink, a.arrivalNotes, getAppointmentAddress(a), ...(a.questions || []).map(q => q.text)]));
 
+      if (list.length === 0 && aptQuery) {
+        container.innerHTML = `<div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-400 text-xs">No appointments match "${escapeHtml(aptQuery)}".</div>`;
+        return;
+      }
       if (list.length === 0) {
         container.innerHTML = `
           <div class="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
@@ -5555,7 +5561,7 @@ const DB_NAME = 'MediVault_Docs_DB';
 
               ${a.notes ? `
               <div class="mt-2 text-xs text-slate-600 dark:text-slate-400 bg-indigo-50/40 dark:bg-indigo-950/20 p-2.5 rounded-lg border border-indigo-100/50 dark:border-indigo-900/30">
-                <span class="text-slate-400 text-[10px] uppercase font-bold block">Topics & Questions to Ask:</span>
+                <span class="text-slate-400 text-[10px] uppercase font-bold block">Notes:</span>
                 <p class="mt-0.5">${escapeHtml(a.notes)}</p>
               </div>` : ''}
               ${renderAptQuestions(a)}
@@ -5816,8 +5822,9 @@ const DB_NAME = 'MediVault_Docs_DB';
       }
       const before = JSON.stringify(state);
       // Remember how many a refill adds, for the next time
+      // (A partial fill or a count correction adds much less than usual, so it does not replace the usual amount)
       const added = Math.round((count - supply.left) * 100) / 100;
-      if (added > 0) m.refillQty = added;
+      if (added > 0 && (!(usual > 0) || added >= usual * 0.5)) m.refillQty = added;
       m.supplyCount = count;
       m.supplyDate = localISODate();
       delete m.refillDismissedFor;
@@ -6071,6 +6078,14 @@ const DB_NAME = 'MediVault_Docs_DB';
        EMERGENCY INFO SCREEN & ONE-PAGE MEDICAL SUMMARY
        Both only read the saved records; they never change anything.
        ===================================================================== */
+    // Sortable YYYY-MM-DD text for a saved date (older records can be MM/DD/YYYY)
+    function sortableDate(v) {
+      const str = String(v || '').trim();
+      const md = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (md) return `${md[3]}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
+      return str;
+    }
+
     function summaryData() {
       const st = state.settings || {};
       const meds = (state.medications || []).slice().sort(medListOrder);
@@ -6084,9 +6099,9 @@ const DB_NAME = 'MediVault_Docs_DB';
         pastMeds: meds.filter(m => m.status === 'past'),
         doctors: (state.careteam || []).filter(d => d && d.name),
         surgeries: (state.surgeries || []).filter(x => x && (x.name || x.procedure))
-          .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+          .sort((a, b) => sortableDate(b.date).localeCompare(sortableDate(a.date))),
         vaccines: (state.vaccines || []).filter(v => v && (v.name || v.title))
-          .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+          .sort((a, b) => sortableDate(b.date).localeCompare(sortableDate(a.date))),
         upcoming: sortAppointmentsByDate((state.appointments || []).filter(a => a.status === 'upcoming' && a.date && calculateDaysRemaining(a.date) >= 0))
       };
     }
@@ -8344,7 +8359,7 @@ const DB_NAME = 'MediVault_Docs_DB';
             </div>
 
             <div>
-              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Questions to Ask & Preparation Notes</label>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Preparation Notes <span class="font-normal text-slate-400">(add questions with "+ Add question" on the appointment card)</span></label>
               <textarea name="notes" rows="2" placeholder="List symptoms to discuss, questions for doctor, or post-visit summary..." class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-slate-800 dark:text-slate-100">${escapeHtml(data.notes || '')}</textarea>
             </div>
           `;
@@ -9607,6 +9622,7 @@ const DB_NAME = 'MediVault_Docs_DB';
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
+      if (id === 'medicalSummaryModal') document.body.classList.remove('printing-summary');
       if (id === 'documentViewerModal') {
         pdfRenderToken++;
         pdfPreviewShown = null;

@@ -1,7 +1,7 @@
 // Offline support for the hosted (https) copy of All in One.
 // Network first so updates show up right away; the cached copy is used when there is no connection.
 // Only the app's own files are cached — records and documents stay in the browser's own storage.
-const CACHE = 'all-in-one-20261111064646';
+const CACHE = 'all-in-one-20261111065219';
 const NETWORK_TIMEOUT_MS = 5000;
 const CALENDAR_CACHE = 'all-in-one-calendar';
 // The text reader for the medication screenshot scan (about 11 MB). It is kept in its own cache,
@@ -28,10 +28,14 @@ const APP_FILES = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
-  // Save the text reader for offline use. This does not hold up the update, and a failure is tried again next time.
-  caches.open(OCR_CACHE).then((cache) => Promise.all(OCR_FILES.map((f) =>
+  // Save the text reader for offline use (only downloads once; a failure is tried again next time and
+  // never stops the update). It is inside waitUntil so the browser does not stop the download partway.
+  const saveReader = caches.open(OCR_CACHE).then((cache) => Promise.all(OCR_FILES.map((f) =>
     cache.match(f).then((hit) => hit || cache.add(f))))).catch(() => {});
+  event.waitUntil(Promise.all([
+    caches.open(CACHE).then((cache) => cache.addAll(APP_FILES)),
+    saveReader
+  ]).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
